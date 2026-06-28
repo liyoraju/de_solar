@@ -1,0 +1,31 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Environment variables (contains secrets)
+.env
+
+# Delta Lake storage
+data/
+
+# Airflow
+logs/
+airflow/logs/
+
+# Spark
+spark_logs/
+
+# dbt
+dbt/target/
+dbt/logs/
+
+# Data
+*.csv
+*.parquet
