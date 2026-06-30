@@ -1,0 +1,48 @@
+auth:
+  type: DISABLED
+kafka:
+  adminClient:
+    describeConsumerGroupsConcurrency: 4
+    describeConsumerGroupsPartitionSize: 50
+    describeTopicsPartitionSize: 200
+    getTopicsConfigPartitionSize: 200
+    listConsumerGroupOffsetsConcurrency: 4
+    listConsumerGroupOffsetsPartitionSize: 50
+  clusters:
+  - bootstrapServers: broker:29092
+    consumerProperties: {}
+    kafkaConnect: []
+    masking: []
+    name: solar_new
+    producerProperties: {}
+    properties: {}
+    readOnly: false
+    schemaRegistryTopicSubjectSuffix: -value
+    serde: []
+  csv:
+    fieldSeparator: ','
+    lineDelimeter: crlf
+    quoteCharacter: '"'
+    quoteStrategy: required
+  fts:
+    acl:
+      distanceScore: true
+      ngramMax: 4
+      ngramMin: 1
+    connect:
+      distanceScore: true
+      ngramMax: 4
+      ngramMin: 1
+    consumers:
+      distanceScore: true
+      ngramMax: 4
+      ngramMin: 1
+    defaultEnabled: false
+    enabled: true
+    schemas:
+      distanceScore: true
+      ngramMax: 4
+      ngramMin: 1
+rbac:
+  roles: []
+webclient: {}

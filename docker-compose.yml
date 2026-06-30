@@ -90,6 +90,7 @@ x-airflow-common:
 services:
   postgres:
     image: postgres:16
+    container_name: airflow-postgres
     environment:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
@@ -317,7 +318,7 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_LOG_DIRS: /var/lib/kafka/data
-      CLUSTER_ID: ${KAFKA_CLUSTER_ID}
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID:-MkU3OEVBNTcwNTJEMTJBREU2Qjk1ODc1ODc1RDRERDQ=}
     networks:           # ← ADD
       - solar-net 
     volumes:
@@ -349,17 +350,18 @@ services:
     networks:
       - solar-net
       - default
+    container_name: timescale_db
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: ${TIMESCALE_PASSWORD}
-      POSTGRES_USER: ${TIMESCALE_USER}
-      POSTGRES_PASSWORD: ${TIMESCALE_PASSWORD}
+      POSTGRES_DB: ${TIMESCALE_DB:-solar_db}
+      POSTGRES_USER: ${TIMESCALE_USER:-tsdb}
+      POSTGRES_PASSWORD: ${TIMESCALE_PASSWORD:-tsdb123}
     volumes:
       - tsdb-data:/var/lib/postgresql/data
       - ./tsdb/init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL","pg_isready -U ${TIMESCALE_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -375,7 +377,8 @@ services:
     env_file:
       - .env
     depends_on:
-      - broker
+      broker:
+        condition: service_healthy
     restart: always
 
   grafana:
@@ -383,7 +386,7 @@ services:
     networks:
       - solar-net
     ports:
-      - "3000-3000"
+      - "3000:3000"
     volumes:
       - grafana-data:/var/lib/grafana
     depends_on:
@@ -399,9 +402,10 @@ services:
     environment:
       DYNAMIC_CONFIG_ENABLED: 'true'
     volumes:
-      - /kafka_ui/config.yml:/etc/kafkaui/dynamic_config.yaml 
+      - ./kafka_ui/config.yml:/etc/kafkaui/dynamic_config.yaml
     depends_on: 
-      - broker   
+      broker:
+        condition: service_healthy  
 
 
 

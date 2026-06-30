@@ -4,14 +4,14 @@ WORKDIR /app
 
 # Copy requirements if they exist
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt requests
 
 # Copy source code
 COPY . .
 
 # Create non-root user
-RUN adduser --disabled-password --gecos '' appuser && chown -R appid:appid /app
-USER appid
+RUN adduser --disabled-password --gecos '' appuser && chown -R appuser:appuser /app
+USER appuser
 
 # Default command - can be overridden in compose
-CMD ["python", "main.py"]
+CMD ["python", "-u", "main.py"]

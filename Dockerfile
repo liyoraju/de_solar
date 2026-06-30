@@ -6,6 +6,5 @@ RUN pip install apache-airflow==3.2.2 \
     dbt-core==1.10.4 \
     dbt-duckdb==1.9.1 \
     duckdb==1.2.2 \
-    great-expectations==1.2.0 \
-    requests==2.32.0 \
-    pydantic==2.7.0
+    great-expectations==0.18.0 \
+    requests==2.32.0
