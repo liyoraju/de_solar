@@ -2,7 +2,6 @@ import os
 import hashlib
 import requests
 import time
-from datetime import datetime
 from confluent_kafka import Producer
 import json
 
