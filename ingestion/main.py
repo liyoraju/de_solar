@@ -3,7 +3,14 @@ import hashlib
 import requests
 import time
 from confluent_kafka import Producer
-import json
+from validate.raw import flattern_data, InverterData, Response
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 
 class extract:
@@ -30,6 +37,7 @@ class extract:
         data = res.json()
         self.access_token = data.get("accessToken")
         res.raise_for_status()
+        logging.info("Token acquired successfully")
         return self.access_token
 
     def extract_raw(self):
@@ -43,8 +51,9 @@ class extract:
             "deviceList": [device_sn],
         }
         res = requests.post(url, headers=headers, json=data)
-        res = res.json()
-        return res
+        res.raise_for_status()
+        logging.info(f"Raw data fetched for device {device_sn}")
+        return res.json()
 
     def extract_history(
         self, startAt=None, endAt=None, granularity=1, measurePoints=None
@@ -64,16 +73,15 @@ class extract:
         if measurePoints:
             data["measurePoints"] = measurePoints
         res = requests.post(url, headers=headers, json=data)
-        print(res.status_code)
-        print(res.json())
+        logging.info(f"History data fetched for device {device_sn}")
         return res
 
 
 def delivery_message(err, msg):
     if err:
-        print(f"Delivery failed : {err}")
+        logging.error(f"Kafka delivery failed: {err}")
     else:
-        print(f"Delivery Success: {msg.value().encode('utf-8')}")
+        logging.info("Kafka delivery succeeded")
 
 
 if __name__ == "__main__":
@@ -82,12 +90,26 @@ if __name__ == "__main__":
     producer = Producer(producer_config)
     try:
         ext = extract()
+        logging.info("deye-poller started")
         while True:
             ext.extract_token()
             data = ext.extract_raw()
-            value = json.dumps(data).encode("utf-8")
+            response = Response.model_validate(data)
+
+            for device_data in response.deviceDataList:
+                device_flat = flattern_data(device_data)
+                main_data = InverterData.model_validate(device_flat)
+
+            value = main_data.model_dump_json().encode("utf-8")
             producer.produce(topic="raw_data", value=value, callback=delivery_message)
+            logging.info(
+                f"Produced to Kafka: {main_data.device_sn} | DC PV1: {main_data.dc_power_pv1}W"
+            )
             time.sleep(60)
     except KeyboardInterrupt:
-        print("Stopped")
+        logging.info("deye-poller stopped")
         producer.flush()
+    except Exception as e:
+        logging.error(f"Fatal error: {e}", exc_info=True)
+        producer.flush()
+        raise

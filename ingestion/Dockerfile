@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Copy requirements if they exist
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt requests
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
 COPY . .
