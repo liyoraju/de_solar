@@ -1,13 +1,16 @@
 from pydantic import BaseModel
+import logging
 
 
 class DataPoint(BaseModel):
+    model_config = {"extra": "forbid"}
     key: str
     value: str
     unit: str
 
 
 class DeviceData(BaseModel):
+    model_config = {"extra": "forbid"}
     deviceSn: str
     deviceType: str
     deviceState: int
@@ -16,6 +19,7 @@ class DeviceData(BaseModel):
 
 
 class Response(BaseModel):
+    model_config = {"extra": "forbid"}
     code: str
     msg: str
     success: bool
@@ -24,6 +28,7 @@ class Response(BaseModel):
 
 
 class InverterData(BaseModel):
+    model_config = {"extra": "forbid"}
     device_sn: str
     device_type: str
     device_state: int
@@ -134,5 +139,7 @@ def flattern_data(device: DeviceData):
     for point in device.dataList:
         if point.key in key_map.keys():
             flat[key_map[point.key]] = float(point.value)
+        else:
+            logging.warning(f"Unmapped key in dataList: {point.key}")
 
     return flat

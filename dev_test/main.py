@@ -1,8 +1,8 @@
+import json
 import os
 import hashlib
 import requests
 import time
-from datetime import datetime
 
 
 class extract:
@@ -46,9 +46,7 @@ class extract:
         print(res.json())
         return res
 
-    def extract_history(
-        self, startAt=None, endAt=None, granularity=1, measurePoints=None
-    ):
+    def extract_history(self, startAt=None, endAt=None, granularity=1):
         device_sn = os.getenv("DEYE_DEVICE_SN")
         url = f"{self.baseUrl}/v1.0/device/history"
         headers = {
@@ -61,34 +59,190 @@ class extract:
             "granularity": granularity,
             "startAt": startAt,
         }
-        if measurePoints:
-            data["measurePoints"] = measurePoints
+        dataList = {
+            1: [
+                "RatedPower",
+                "DCVoltagePV1",
+                "DCVoltagePV2",
+                "DCVoltagePV3",
+                "DCVoltagePV4",
+            ],
+            2: [
+                "DCVoltagePV5",
+                "DCVoltagePV6",
+                "DCVoltagePV7",
+                "DCVoltagePV8",
+                "DCCurrentPV1",
+            ],
+            3: [
+                "DCCurrentPV2",
+                "DCCurrentPV3",
+                "DCCurrentPV4",
+                "DCCurrentPV5",
+                "DCCurrentPV6",
+            ],
+            4: [
+                "DCCurrentPV7",
+                "DCCurrentPV8",
+                "DCPowerPV1",
+                "DCPowerPV2",
+                "DCPowerPV3",
+            ],
+            5: [
+                "DCPowerPV4",
+                "DCPowerPV5",
+                "DCPowerPV6",
+                "DCPowerPV7",
+                "DCPowerPV8",
+            ],
+            6: [
+                "ACVoltageRUA",
+                "ACVoltageSVB",
+                "ACVoltageTWC",
+                "ACCurrentRUA",
+                "ACCurrentSVB",
+            ],
+            7: [
+                "ACCurrentTWC",
+                "ACOutputFrequencyR",
+                "TotalActiveACOutputPower",
+                "ABLineVoltage",
+                "BCLineVoltage",
+            ],
+            8: [
+                "ACLineVoltage",
+                "TotalActiveProduction",
+                "DailyActiveProduction",
+                "InverterOutputPowerL1",
+                "InverterOutputPowerL2",
+            ],
+            9: [
+                "InverterOutputPowerL3",
+                "TotalGridFeedIn",
+                "TotalEnergyPurchased",
+                "TotalConsumptionPower",
+                "TotalConsumption",
+            ],
+        }
+        # if granularity == 1:
+        #     data["measurePoints"] = [
+        #         "RatedPower",
+        #     ]
+        all_data = []
+        if granularity == 1:
+            for measure_points in dataList.values():
+                data["measurePoints"] = measure_points
+                res = requests.post(url, headers=headers, json=data)
+                if res.status_code == 200:
+                    all_data.append(res.json())
+                else:
+                    print(f"failed due to {res.raise_for_status}: {res.text}")
+            return all_data
+
         res = requests.post(url, headers=headers, json=data)
         print(res.status_code)
-        print(res.json())
-        return res
+        return res.json()
 
 
 if __name__ == "__main__":
     try:
-        n = 0
         ext = extract()
-        while n != 6:
-            ext.extract_token()
-            # data = ext.extract_history(
-            #     startAt=f"{datetime.today():%Y-%m-%d}",
-            #     measurePoints=["DCVoltagePV1", "DCCurrentPV1", "DCPowerPV1"],
-            #     endAt=f"{datetime.today():%Y-%m-%d}",
-            # )
-            data = ext.extract_raw()
-            print(data)
-            time.sleep(10)
-            n += 1
+
+        ext.extract_token()
+        data = ext.extract_history(
+            startAt="2026-07-02",
+            endAt="2026-07-02",
+            granularity=1,
+        )
+        with open("history_data.json", "w") as f:
+            json.dump(data, f)
     except KeyboardInterrupt:
         print("Stopped")
+dataList = [
+    {
+        1: [
+            "RatedPower",
+            "DCVoltagePV1",
+            "DCVoltagePV2",
+            "DCVoltagePV3",
+            "DCVoltagePV4",
+        ]
+    },
+    {
+        2: [
+            "DCVoltagePV5",
+            "DCVoltagePV6",
+            "DCVoltagePV7",
+            "DCVoltagePV8",
+            "DCCurrentPV1",
+        ]
+    },
+    {
+        3: [
+            "DCCurrentPV2",
+            "DCCurrentPV3",
+            "DCCurrentPV4",
+            "DCCurrentPV5",
+            "DCCurrentPV6",
+        ]
+    },
+    {
+        4: [
+            "DCCurrentPV7",
+            "DCCurrentPV8",
+            "DCPowerPV1",
+            "DCPowerPV2",
+            "DCPowerPV3",
+        ]
+    },
+    {
+        5: [
+            "DCPowerPV4",
+            "DCPowerPV5",
+            "DCPowerPV6",
+            "DCPowerPV7",
+            "DCPowerPV8",
+        ]
+    },
+    {
+        6: [
+            "ACVoltageRUA",
+            "ACVoltageSVB",
+            "ACVoltageTWC",
+            "ACCurrentRUA",
+            "ACCurrentSVB",
+        ]
+    },
+    {
+        7: [
+            "ACCurrentTWC",
+            "ACOutputFrequencyR",
+            "TotalActiveACOutputPower",
+            "ABLineVoltage",
+            "BCLineVoltage",
+        ]
+    },
+    {
+        8: [
+            "ACLineVoltage",
+            "TotalActiveProduction",
+            "DailyActiveProduction",
+            "InverterOutputPowerL1",
+            "InverterOutputPowerL2",
+        ]
+    },
+    {
+        9: [
+            "InverterOutputPowerL3",
+            "TotalGridFeedIn",
+            "TotalEnergyPurchased",
+            "TotalConsumptionPower",
+            "TotalConsumption",
+        ]
+    },
+]
 
-
-data = {
+raw_data = {
     "code": "1000000",
     "msg": "success",
     "success": True,
@@ -145,6 +299,110 @@ data = {
                 {"key": "TotalEnergyPurchased", "value": "0.00", "unit": "kWh"},
                 {"key": "TotalConsumptionPower", "value": "2586", "unit": "W"},
                 {"key": "TotalConsumption", "value": "0.00", "unit": "kWh"},
+            ],
+        }
+    ],
+}
+
+
+hist_1 = {
+    "code": "1000000",
+    "msg": "success",
+    "success": True,
+    "requestId": "af0dd7ab349437d3",
+    "deviceSn": "2601078791",
+    "deviceId": 373268,
+    "deviceType": "INVERTER",
+    "granularity": 1,
+    "dataList": [
+        {
+            "time": "1780407509",
+            "itemList": [
+                {"unit": "V", "value": "48.00", "key": "DCVoltagePV1"},
+                {"unit": "W", "value": "3000.00", "key": "RatedPower"},
+            ],
+        }
+    ],
+}
+
+hist_2_daily = {
+    "code": "1000000",
+    "msg": "success",
+    "success": True,
+    "requestId": "7d0e6ca1cd8b26c0",
+    "deviceSn": "2601078791",
+    "deviceId": 373268,
+    "deviceType": "INVERTER",
+    "granularity": 2,
+    "dataList": [
+        {
+            "time": "2026-05-30",
+            "itemList": [
+                {"unit": "kWh", "value": "12.70", "key": "Production"},
+                {"unit": "kWh", "value": "0.00", "key": "GridFeed-in"},
+                {"unit": "kWh", "value": "0.00", "key": "Consumption"},
+                {"unit": "kWh", "value": "0.00", "key": "ElectricityPurchasing"},
+            ],
+        },
+    ],
+}
+
+hist_3_monthly = {
+    "code": "1000000",
+    "msg": "success",
+    "success": True,
+    "requestId": "a11ebcd9a26d36d7",
+    "deviceSn": "2601078791",
+    "deviceId": 373268,
+    "deviceType": "INVERTER",
+    "granularity": 3,
+    "dataList": [
+        {
+            "time": "2026-5",
+            "itemList": [
+                {"unit": "kWh", "value": "352.10", "key": "Production"},
+                {"unit": "kWh", "value": "0.00", "key": "GridFeed-in"},
+                {"unit": "kWh", "value": "0.00", "key": "Consumption"},
+                {"unit": "kWh", "value": "0.00", "key": "ElectricityPurchasing"},
+            ],
+        },
+        {
+            "time": "2026-6",
+            "itemList": [
+                {"unit": "kWh", "value": "290.30", "key": "Production"},
+                {"unit": "kWh", "value": "0.00", "key": "GridFeed-in"},
+                {"unit": "kWh", "value": "0.00", "key": "Consumption"},
+                {"unit": "kWh", "value": "0.00", "key": "ElectricityPurchasing"},
+            ],
+        },
+        {
+            "time": "2026-7",
+            "itemList": [
+                {"unit": "kWh", "value": "14.70", "key": "Production"},
+                {"unit": "kWh", "value": "0.00", "key": "GridFeed-in"},
+                {"unit": "kWh", "value": "0.00", "key": "Consumption"},
+                {"unit": "kWh", "value": "0.00", "key": "ElectricityPurchasing"},
+            ],
+        },
+    ],
+}
+hist_4_yearly = {
+    "code": "1000000",
+    "msg": "success",
+    "success": True,
+    "requestId": "ec19188d90bd00a7",
+    "deviceSn": "2601078791",
+    "deviceId": 373268,
+    "deviceType": "INVERTER",
+    "granularity": 4,
+    "dataList": [
+        {
+            "time": "2026",
+            "itemList": [
+                {"unit": "kWh", "name": "Production", "value": "680.80"},
+                {"unit": "kWh", "name": "GridFeed-in", "value": "0.00"},
+                {"unit": "kWh", "name": "Consumption", "value": "0.00"},
+                {"unit": "kWh", "name": "ElectricityPurchasing", "value": "0.00"},
             ],
         }
     ],

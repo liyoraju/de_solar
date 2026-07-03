@@ -1,10 +1,27 @@
 import os
 import hashlib
+import json
+from pydantic import ValidationError
 import requests
 import time
 from confluent_kafka import Producer
 from validate.raw import flattern_data, InverterData, Response
 import logging
+
+# Validate required environment variables at startup
+required_env_vars = [
+    "DEYE_APP_ID",
+    "DEYE_APP_SECRET",
+    "DEYE_EMAIL",
+    "DEYE_PASSWORD",
+    "DEYE_DEVICE_SN",
+]
+
+missing_vars = [var for var in required_env_vars if not os.getenv(var)]
+if missing_vars:
+    error_msg = f"Missing required environment variables: {', '.join(missing_vars)}"
+    print(f"ERROR: {error_msg}")
+    raise EnvironmentError(error_msg)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,9 +51,9 @@ class extract:
         }
 
         res = requests.post(url, headers=headers, json=data)
+        res.raise_for_status()
         data = res.json()
         self.access_token = data.get("accessToken")
-        res.raise_for_status()
         logging.info("Token acquired successfully")
         return self.access_token
 
@@ -55,9 +72,7 @@ class extract:
         logging.info(f"Raw data fetched for device {device_sn}")
         return res.json()
 
-    def extract_history(
-        self, startAt=None, endAt=None, granularity=1, measurePoints=None
-    ):
+    def extract_history(self, startAt=None, endAt=None, granularity=1):
         device_sn = os.getenv("DEYE_DEVICE_SN")
         url = f"{self.baseUrl}/v1.0/device/history"
         headers = {
@@ -70,11 +85,25 @@ class extract:
             "granularity": granularity,
             "startAt": startAt,
         }
-        if measurePoints:
-            data["measurePoints"] = measurePoints
+        if granularity == 1:
+            data["measurePoints"] = [
+                "RatedPower",
+            ]
         res = requests.post(url, headers=headers, json=data)
+        res.raise_for_status()
         logging.info(f"History data fetched for device {device_sn}")
-        return res
+        return res.json()
+
+
+def dead_letter(data, ve):
+    dead_data = data.copy()
+    dead_data["_error"] = str(ve)
+    dead_value = json.dumps(dead_data).encode("utf-8")
+    producer.produce(
+        topic="dead_letter",
+        value=dead_value,
+        callback=delivery_message,
+    )
 
 
 def delivery_message(err, msg):
@@ -94,17 +123,35 @@ if __name__ == "__main__":
         while True:
             ext.extract_token()
             data = ext.extract_raw()
-            response = Response.model_validate(data)
+            try:
+                response = Response.model_validate(data)
+                if not response.success:
+                    logging.error(f"Failed to fetch data: {response.msg}")
+                    time.sleep(60)
+                    continue
 
-            for device_data in response.deviceDataList:
-                device_flat = flattern_data(device_data)
-                main_data = InverterData.model_validate(device_flat)
+                for device_data in response.deviceDataList:
+                    device_flat = flattern_data(device_data)
+                    try:
+                        main_data = InverterData.model_validate(device_flat)
+                        value = main_data.model_dump_json().encode("utf-8")
+                        producer.produce(
+                            topic="raw_data", value=value, callback=delivery_message
+                        )
+                        logging.info(
+                            f"Produced to Kafka: {main_data.device_sn} | DC PV1: {main_data.dc_power_pv1}W"
+                        )
+                    except ValidationError as ve:
+                        logging.error(
+                            f"Validation error for device {device_data.deviceSn}: {ve}"
+                        )
+                        # Create a minimal dead letter record with available data
+                        dead_letter(data, ve)
 
-            value = main_data.model_dump_json().encode("utf-8")
-            producer.produce(topic="raw_data", value=value, callback=delivery_message)
-            logging.info(
-                f"Produced to Kafka: {main_data.device_sn} | DC PV1: {main_data.dc_power_pv1}W"
-            )
+            except ValidationError as ve:
+                logging.error(f"Validation error: {ve}")
+                dead_letter(data, ve)
+                time.sleep(60)
             time.sleep(60)
     except KeyboardInterrupt:
         logging.info("deye-poller stopped")
