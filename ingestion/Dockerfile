@@ -14,4 +14,4 @@ RUN adduser --disabled-password --gecos '' appuser && chown -R appuser:appuser /
 USER appuser
 
 # Default command - can be overridden in compose
-CMD ["python", "-u", "main.py"]
+CMD ["python", "-u", "main_call.py"]

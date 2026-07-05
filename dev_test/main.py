@@ -1,8 +1,19 @@
 import json
 import os
 import hashlib
+from datetime import datetime
 import requests
 import time
+from validate.history import DeviceData
+from validate.raw import Response
+import logging
+from pydantic import ValidationError
+import time
+from confluent_kafka import Producer
+from validate.raw import flattern_data, InverterData, Response
+import logging
+import json
+from validate.history import DeviceData
 
 
 class extract:
@@ -43,8 +54,7 @@ class extract:
         }
         res = requests.post(url, headers=headers, json=data)
         print(res.status_code)
-        print(res.json())
-        return res
+        return res.json()
 
     def extract_history(self, startAt=None, endAt=None, granularity=1):
         device_sn = os.getenv("DEYE_DEVICE_SN")
@@ -134,7 +144,8 @@ class extract:
                 data["measurePoints"] = measure_points
                 res = requests.post(url, headers=headers, json=data)
                 if res.status_code == 200:
-                    all_data.append(res.json())
+                    device_data = DeviceData.model_validate(res.json())
+                    all_data.append(device_data)
                 else:
                     print(f"failed due to {res.raise_for_status}: {res.text}")
             return all_data
@@ -145,19 +156,60 @@ class extract:
 
 
 if __name__ == "__main__":
-    try:
-        ext = extract()
+    # try:
+    #     ext = extract()
+    #     ext.extract_token()
+    #     raw_data = ext.extract_raw()
 
-        ext.extract_token()
-        data = ext.extract_history(
-            startAt="2026-07-02",
-            endAt="2026-07-02",
-            granularity=1,
-        )
-        with open("history_data.json", "w") as f:
-            json.dump(data, f)
-    except KeyboardInterrupt:
-        print("Stopped")
+    #     h_data = ext.extract_history(
+    #         startAt="2026",
+    #         endAt="2026",
+    #         granularity=4,
+    #     )
+    #     h_data = DeviceData.model_validate(h_data)
+    #     print(h_data)
+
+    # with open("history_data_valid.json", "w") as f:
+    #     json.dump([d.model_dump() for d in h_data], f, indent=4)
+    def history_push_to_kafka(startAt: str, endAt: str, granularity: int):
+        try:
+            ext = extract()
+            logging.info("deye-poller started")
+
+            ext.extract_token()
+            data = ext.extract_history(
+                startAt=startAt,
+                endAt=endAt,
+                granularity=granularity,
+            )
+            if granularity == 1:
+                for d in data:
+                    value = json.dumps(d, default=str).encode("utf-8")
+
+                    # producer.produce(
+                    #     topic=topic, value=value, callback=delivery_message
+                    # )
+                    # producer.poll(0)
+            else:
+                value = DeviceData.model_validate(data)
+                value = value.model_dump_json().encode("utf-8")
+            # producer.produce(topic=topic, value=value, callback=delivery_message)
+
+        except ValidationError as ve:
+            logging.error(f"Validation error : {ve}")
+            # Create a minimal dead letter record with available data
+        except KeyboardInterrupt:
+            logging.info("deye-poller stopped")
+            # producer.flush()
+        # except Exception as e:
+        #     logging.error(f"Fatal error: {e}", exc_info=True)
+        #     producer.flush()
+        #     raise
+        return 0
+
+    history_push_to_kafka("2026-06-04", "2026-07-03", 1)
+    # except KeyboardInterrupt:
+    #     print("Stopped")
 dataList = [
     {
         1: [
