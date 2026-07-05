@@ -48,6 +48,11 @@ def history_push_to_kafka(startAt: str, endAt: str, granularity: int, topic: str
     return 0
 
 
+history_push_to_kafka("2026-07-05", "2026-07-04", 1, "h1_data")
+history_push_to_kafka("2026-07-01", "2026-07-04", 2, "h2_data")
+history_push_to_kafka("2026-06", "2026-07", 3, "h3_data")
+history_push_to_kafka("2026", "2026", 4, "h4_data")
+
 # Near-real-time data extraction loop
 try:
     ext = extract()

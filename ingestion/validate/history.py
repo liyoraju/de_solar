@@ -68,7 +68,7 @@ class ItemList(BaseModel):
 
 class DataList(BaseModel):
     model_config = {"extra": "forbid"}
-    time: int
+    time: str
     itemList: list[ItemList]
 
 

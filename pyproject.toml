@@ -7,5 +7,6 @@ requires-python = ">=3.13"
 dependencies = [
     "confluent-kafka>=2.14.2",
     "dbt-duckdb>=1.10.1",
+    "pyspark==3.5.3",
     "requests>=2.34.2",
 ]

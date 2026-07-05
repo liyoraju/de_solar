@@ -321,6 +321,7 @@ services:
       CLUSTER_ID: ${KAFKA_CLUSTER_ID:-MkU3OEVBNTcwNTJEMTJBREU2Qjk1ODc1ODc1RDRERDQ=}
     networks:           # ← ADD
       - solar-net 
+      - default
     volumes:
       - kafka-data:/var/lib/kafka/data
     healthcheck:
@@ -331,15 +332,47 @@ services:
       start_period: 30s
     restart: always
 
-  spark:
+  spark-master:
     build:
-      context: ./streaming        # ← folder where Dockerfile lives
-      dockerfile: Dockerfile      # ← filename (can omit if named Dockerfile)
+      context: ./streaming
+      dockerfile: Dockerfile
+    container_name: spark-master
     networks:
       - solar-net
       - default
+    environment:
+      SPARK_MODE: master
+      SPARK_MASTER_HOST: spark-master
+      SPARK_RPC_AUTHENTICATION_ENABLED: no
+      SPARK_RPC_ENCRYPTION_ENABLED: no
     ports:
-      - "8082:8080"               # Spark Master UI
+      - "8082:8080"    # Spark Master UI
+      - "7077:7077"    # Spark Master port (workers connect here)
+    volumes:
+      - ./streaming:/app
+      - ./data/delta:/data/delta
+    restart: always
+ 
+  # ── SPARK WORKER ────────────────────────────────────
+  spark-worker:
+    build:
+      context: ./streaming
+      dockerfile: Dockerfile
+    container_name: spark-worker
+    networks:
+      - solar-net
+      - default
+    environment:
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_WORKER_MEMORY: 2G
+      SPARK_WORKER_CORES: 2
+      SPARK_RPC_AUTHENTICATION_ENABLED: no
+      SPARK_RPC_ENCRYPTION_ENABLED: no
+    ports:
+      - "8083:8081"    # Spark Worker UI
+    depends_on:
+      - spark-master
     volumes:
       - ./streaming:/app
       - ./data/delta:/data/delta
@@ -401,8 +434,8 @@ services:
       - "8090:8080"
     environment:
       DYNAMIC_CONFIG_ENABLED: 'true'
-    volumes:
-      - ./kafka_ui/config.yml:/etc/kafkaui/dynamic_config.yaml
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: broker:29092
     depends_on: 
       broker:
         condition: service_healthy  
