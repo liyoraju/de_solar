@@ -1,19 +1,26 @@
-# streaming/Dockerfile
-FROM apache/spark:3.5.3-python3
+FROM apache/spark:3.5.3-scala2.12-java17-python3-ubuntu
 
 USER root
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir \
+    delta-spark==3.2.0
 
-# install delta lake + kafka connector
-RUN pip install delta-spark==3.2.0 pyspark==3.5.3
+ADD https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.1/postgresql-42.7.1.jar \
+    /opt/spark/jars/ext/postgresql-42.7.1.jar
+
+RUN mkdir -p /tmp/.ivy2/cache /tmp/.ivy2/jars \
+    && chown -R spark:spark /tmp/.ivy2 /opt/spark/jars/ext
 
 USER spark
 
-# Start Spark master and keep container alive for submitting jobs
-CMD ["/bin/bash", "-c", "\
-if [ \"$SPARK_MODE\" = 'worker' ]; then \
-  /opt/spark/sbin/start-worker.sh $SPARK_MASTER_URL; \
-else \
-  /opt/spark/sbin/start-master.sh; \
-  fi && sleep infinity"]
+ENV SPARK_SUBMIT_OPTS="-Divy.home=/tmp/.ivy2"
+
+CMD ["/opt/spark/bin/spark-submit", \
+     "--master", "local[2]", \
+     "--driver-memory", "1g", \
+     "--jars", "/opt/spark/jars/ext/postgresql-42.7.1.jar", \
+     "--packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3,io.delta:delta-spark_2.12:3.2.0", \
+     "--conf", "spark.driver.maxResultSize=512m", \
+     "--conf", "spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension", \
+     "--conf", "spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog", \
+     "/app/main.py"]

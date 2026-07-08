@@ -459,3 +459,65 @@ hist_4_yearly = {
         }
     ],
 }
+schema = StructType(
+    [
+        StructField("device_sn", StringType(), True),
+        StructField("device_type", StringType(), True),
+        StructField("device_state", IntegerType(), True),
+        StructField("collection_time", LongType(), True),
+        StructField("rated_power", DoubleType(), True),
+        # DC Voltages
+        StructField("dc_voltage_pv1", DoubleType(), True),
+        StructField("dc_voltage_pv2", DoubleType(), True),
+        StructField("dc_voltage_pv3", DoubleType(), True),
+        StructField("dc_voltage_pv4", DoubleType(), True),
+        StructField("dc_voltage_pv5", DoubleType(), True),
+        StructField("dc_voltage_pv6", DoubleType(), True),
+        StructField("dc_voltage_pv7", DoubleType(), True),
+        StructField("dc_voltage_pv8", DoubleType(), True),
+        # DC Currents
+        StructField("dc_current_pv1", DoubleType(), True),
+        StructField("dc_current_pv2", DoubleType(), True),
+        StructField("dc_current_pv3", DoubleType(), True),
+        StructField("dc_current_pv4", DoubleType(), True),
+        StructField("dc_current_pv5", DoubleType(), True),
+        StructField("dc_current_pv6", DoubleType(), True),
+        StructField("dc_current_pv7", DoubleType(), True),
+        StructField("dc_current_pv8", DoubleType(), True),
+        # DC Power
+        StructField("dc_power_pv1", DoubleType(), True),
+        StructField("dc_power_pv2", DoubleType(), True),
+        StructField("dc_power_pv3", DoubleType(), True),
+        StructField("dc_power_pv4", DoubleType(), True),
+        StructField("dc_power_pv5", DoubleType(), True),
+        StructField("dc_power_pv6", DoubleType(), True),
+        StructField("dc_power_pv7", DoubleType(), True),
+        StructField("dc_power_pv8", DoubleType(), True),
+        # AC Voltage
+        StructField("ac_voltage_rua", DoubleType(), True),
+        StructField("ac_voltage_svb", DoubleType(), True),
+        StructField("ac_voltage_twc", DoubleType(), True),
+        # AC Current
+        StructField("ac_current_rua", DoubleType(), True),
+        StructField("ac_current_svb", DoubleType(), True),
+        StructField("ac_current_twc", DoubleType(), True),
+        StructField("ac_output_frequency_r", DoubleType(), True),
+        StructField("total_active_ac_output_power", DoubleType(), True),
+        # Line Voltages
+        StructField("ab_line_voltage", DoubleType(), True),
+        StructField("bc_line_voltage", DoubleType(), True),
+        StructField("ac_line_voltage", DoubleType(), True),
+        # Production
+        StructField("total_active_production", DoubleType(), True),
+        StructField("daily_active_production", DoubleType(), True),
+        # Inverter Output Power
+        StructField("inverter_output_power_l1", DoubleType(), True),
+        StructField("inverter_output_power_l2", DoubleType(), True),
+        StructField("inverter_output_power_l3", DoubleType(), True),
+        # Energy
+        StructField("total_grid_feed_in", DoubleType(), True),
+        StructField("total_energy_purchased", DoubleType(), True),
+        StructField("total_consumption_power", DoubleType(), True),
+        StructField("total_consumption", DoubleType(), True),
+    ]
+)

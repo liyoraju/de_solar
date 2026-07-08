@@ -302,7 +302,8 @@ services:
     image: confluentinc/cp-kafka:8.2.2
     container_name: broker
     ports:
-      - "9092:9092"
+      - "29092:29092"
+      - "29093:29093"
     hostname: broker
     environment:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
@@ -314,13 +315,13 @@ services:
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_NODE_ID: 1
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@broker:29093
-      KAFKA_LISTENERS: PLAINTEXT://broker:29092,CONTROLLER://broker:29093,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_LOG_DIRS: /var/lib/kafka/data
       CLUSTER_ID: ${KAFKA_CLUSTER_ID:-MkU3OEVBNTcwNTJEMTJBREU2Qjk1ODc1ODc1RDRERDQ=}
-    networks:           # ← ADD
-      - solar-net 
+    networks:
+      - solar-net
       - default
     volumes:
       - kafka-data:/var/lib/kafka/data
@@ -332,51 +333,26 @@ services:
       start_period: 30s
     restart: always
 
-  spark-master:
+  spark:
     build:
       context: ./streaming
       dockerfile: Dockerfile
-    container_name: spark-master
-    networks:
-      - solar-net
-      - default
-    environment:
-      SPARK_MODE: master
-      SPARK_MASTER_HOST: spark-master
-      SPARK_RPC_AUTHENTICATION_ENABLED: no
-      SPARK_RPC_ENCRYPTION_ENABLED: no
+    container_name: spark
+    env_file:
+      - .env
+    networks: [solar-net, default]
     ports:
-      - "8082:8080"    # Spark Master UI
-      - "7077:7077"    # Spark Master port (workers connect here)
+      - "4040:4040"
+    mem_limit: 2g
     volumes:
       - ./streaming:/app
       - ./data/delta:/data/delta
-    restart: always
- 
-  # ── SPARK WORKER ────────────────────────────────────
-  spark-worker:
-    build:
-      context: ./streaming
-      dockerfile: Dockerfile
-    container_name: spark-worker
-    networks:
-      - solar-net
-      - default
-    environment:
-      SPARK_MODE: worker
-      SPARK_MASTER_URL: spark://spark-master:7077
-      SPARK_WORKER_MEMORY: 2G
-      SPARK_WORKER_CORES: 2
-      SPARK_RPC_AUTHENTICATION_ENABLED: no
-      SPARK_RPC_ENCRYPTION_ENABLED: no
-    ports:
-      - "8083:8081"    # Spark Worker UI
     depends_on:
-      - spark-master
-    volumes:
-      - ./streaming:/app
-      - ./data/delta:/data/delta
-    restart: always
+      broker:
+        condition: service_healthy
+      timescale_db:
+        condition: service_healthy
+    restart: no
 
   timescale_db:
     image: timescale/timescaledb:latest-pg16
