@@ -6,24 +6,22 @@ import logging
 from main_def import delivery_message, dead_letter, extract
 import json
 from validate.history import DeviceData
+from history import get_last_date, save_last_date
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 
 
 producer_config = {"bootstrap.servers": "broker:29092"}
-
 producer = Producer(producer_config)
 
 
-# Historical granularity 1 data extraction (one-time run)
 def history_push_to_kafka(startAt: str, endAt: str, granularity: int, topic: str):
     try:
         ext = extract()
-        logging.info("deye-poller started")
-
+        logging.info(f"Backfill [{topic}] {startAt} -> {endAt}")
         ext.extract_token()
         data = ext.extract_history(
-            startAt=startAt,
-            endAt=endAt,
-            granularity=granularity,
+            startAt=startAt, endAt=endAt, granularity=granularity
         )
         if granularity == 1:
             for d in data:
@@ -34,24 +32,82 @@ def history_push_to_kafka(startAt: str, endAt: str, granularity: int, topic: str
             value = DeviceData.model_validate(data)
             value = value.model_dump_json().encode("utf-8")
             producer.produce(topic=topic, value=value, callback=delivery_message)
-
     except ValidationError as ve:
         logging.error(f"Validation error : {ve}")
-        # Create a minimal dead letter record with available data
     except KeyboardInterrupt:
         logging.info("deye-poller stopped")
-        # producer.flush()
-    # except Exception as e:
-    #     logging.error(f"Fatal error: {e}", exc_info=True)
-    #     producer.flush()
-    #     raise
     return 0
 
 
-history_push_to_kafka("2026-07-05", "2026-07-04", 1, "h1_data")
-history_push_to_kafka("2026-07-01", "2026-07-04", 2, "h2_data")
-history_push_to_kafka("2026-06", "2026-07", 3, "h3_data")
-history_push_to_kafka("2026", "2026", 4, "h4_data")
+def backfill_granularity_1():
+    last = get_last_date(1)
+    if not last:
+        return
+    current = datetime.strptime(last, "%Y-%m-%d").date()
+    today = datetime.today().date()
+    while current <= today:
+        date_str = current.strftime("%Y-%m-%d")
+        history_push_to_kafka(date_str, date_str, 1, "h1_data")
+        save_last_date(1, date_str)
+        current += timedelta(days=1)
+
+
+def backfill_granularity_2():
+    last = get_last_date(2)
+    if not last:
+        return
+    current = datetime.strptime(last, "%Y-%m-%d").date()
+    today = datetime.today().date()
+    while current <= today:
+        date_str = current.strftime("%Y-%m-%d")
+        history_push_to_kafka(date_str, date_str, 2, "h2_data")
+        save_last_date(2, date_str)
+        current += timedelta(days=1)
+
+
+def backfill_granularity_3():
+    last = get_last_date(3)
+    if not last:
+        return
+    current = datetime.strptime(last, "%Y-%m")
+    today = datetime.today()
+    while current <= today:
+        month_str = current.strftime("%Y-%m")
+        history_push_to_kafka(month_str, month_str, 3, "h3_data")
+        save_last_date(3, month_str)
+        current += relativedelta(months=1)
+
+
+def backfill_granularity_4():
+    last = get_last_date(4)
+    if not last:
+        return
+    current = datetime.strptime(last, "%Y")
+    today = datetime.today()
+    while current <= today:
+        year_str = current.strftime("%Y")
+        history_push_to_kafka(year_str, year_str, 4, "h4_data")
+        save_last_date(4, year_str)
+        current += relativedelta(years=1)
+
+
+backfill_functions = [
+    backfill_granularity_1,
+    backfill_granularity_2,
+    backfill_granularity_3,
+    backfill_granularity_4,
+]
+
+for backfill in backfill_functions:
+    try:
+        backfill()
+    except Exception as e:
+        # Log the specific function that failed, but keep the loop moving
+        logging.error(f"{backfill.__name__} failed: {e}", exc_info=True)
+
+# Flush everything at the end of the batch
+producer.flush()
+
 
 # Near-real-time data extraction loop
 try:
@@ -82,9 +138,7 @@ try:
                     logging.error(
                         f"Validation error for device {device_data.deviceSn}: {ve}"
                     )
-                    # Create a minimal dead letter record with available data
                     dead_letter(data, ve)
-
         except ValidationError as ve:
             logging.error(f"Validation error: {ve}")
             dead_letter(data, ve)

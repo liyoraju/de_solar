@@ -1,5 +1,7 @@
 FROM apache/spark:3.5.3-scala2.12-java17-python3-ubuntu
 
+WORKDIR /app
+
 USER root
 
 RUN pip install --no-cache-dir \
@@ -10,6 +12,8 @@ ADD https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.1/postgresql-4
 
 RUN mkdir -p /tmp/.ivy2/cache /tmp/.ivy2/jars \
     && chown -R spark:spark /tmp/.ivy2 /opt/spark/jars/ext
+
+COPY . .
 
 USER spark
 

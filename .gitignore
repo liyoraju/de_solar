@@ -15,10 +15,6 @@ wheels/
 # Delta Lake storage
 data/
 
-# Airflow
-logs/
-airflow/logs/
-
 # Spark
 spark_logs/
 

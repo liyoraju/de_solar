@@ -1,0 +1,60 @@
+[0m16:03:18.923804 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'start', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001E92162A900>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001E9202F1450>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001E923B23C50>]}
+
+
+============================== 16:03:19.041063 | 0afcf8b0-efe6-491f-a2d5-f8c1d512bf95 ==============================
+[0m16:03:19.041063 [info ] [MainThread]: Running with dbt=1.11.11
+[0m16:03:19.041902 [debug] [MainThread]: running dbt with arguments {'version_check': 'True', 'no_print': 'None', 'static_parser': 'True', 'warn_error_options': 'WarnErrorOptionsV2(error=[], warn=[], silence=[])', 'target_path': 'None', 'printer_width': '80', 'write_json': 'True', 'empty': 'None', 'log_cache_events': 'False', 'introspect': 'True', 'cache_selected_only': 'False', 'fail_fast': 'False', 'debug': 'False', 'log_format': 'default', 'partial_parse': 'True', 'send_anonymous_usage_stats': 'True', 'quiet': 'False', 'warn_error': 'None', 'profiles_dir': 'C:\\Users\\liyor\\.dbt', 'indirect_selection': 'eager', 'use_colors': 'True', 'invocation_command': 'dbt init', 'use_experimental_parser': 'False', 'log_path': 'logs'}
+[0m16:03:40.327058 [debug] [MainThread]: Starter project path: C:\Users\liyor\Documents\Data Engineer\de_solar_project\.venv\Lib\site-packages\dbt\include\starter_project
+[0m16:03:40.355374 [info ] [MainThread]: 
+Your new dbt project "dbt_solar" was created!
+
+For more information on how to configure the profiles.yml file,
+please consult the dbt documentation here:
+
+  https://docs.getdbt.com/docs/configure-your-profile
+
+One more thing:
+
+Need help? Don't hesitate to reach out to us via GitHub issues or on Slack:
+
+  https://community.getdbt.com/
+
+Happy modeling!
+
+[0m16:03:40.355934 [info ] [MainThread]: Setting up your profile.
+[0m16:03:49.525641 [debug] [MainThread]: Spark adapter: Setting pyhive.hive logging to ERROR
+[0m16:03:49.526106 [debug] [MainThread]: Spark adapter: Setting thrift.transport logging to ERROR
+[0m16:03:49.526353 [debug] [MainThread]: Spark adapter: Setting thrift.protocol logging to ERROR
+[0m16:10:28.497572 [info ] [MainThread]: Profile dbt_solar written to C:\Users\liyor\.dbt\profiles.yml using target's profile_template.yml and your supplied values. Run 'dbt debug' to validate the connection.
+[0m16:10:28.498831 [debug] [MainThread]: Command `dbt init` succeeded at 16:10:28.498580 after 429.79 seconds
+[0m16:10:28.499229 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'end', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001E923F943E0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001E923A92E70>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001E923CC9E10>]}
+[0m16:10:28.499593 [debug] [MainThread]: Flushing usage events
+[0m16:10:29.839752 [debug] [MainThread]: An error was encountered while trying to flush usage events
+[0m17:09:43.935649 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'start', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001AA1D099940>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001AA1AD1D090>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001AA1F4C3D90>]}
+
+
+============================== 17:09:43.978121 | f5f78e07-1d9e-4cb9-9289-e80df5ba749d ==============================
+[0m17:09:43.978121 [info ] [MainThread]: Running with dbt=1.11.11
+[0m17:09:43.979361 [debug] [MainThread]: running dbt with arguments {'version_check': 'True', 'no_print': 'None', 'static_parser': 'True', 'warn_error_options': 'WarnErrorOptionsV2(error=[], warn=[], silence=[])', 'target_path': 'None', 'printer_width': '80', 'write_json': 'True', 'empty': 'None', 'log_cache_events': 'False', 'introspect': 'True', 'cache_selected_only': 'False', 'fail_fast': 'False', 'debug': 'False', 'log_format': 'default', 'partial_parse': 'True', 'send_anonymous_usage_stats': 'True', 'quiet': 'False', 'warn_error': 'None', 'profiles_dir': 'C:\\Users\\liyor\\.dbt', 'indirect_selection': 'eager', 'use_colors': 'True', 'invocation_command': 'dbt init', 'use_experimental_parser': 'False', 'log_path': 'logs'}
+[0m17:09:54.173782 [debug] [MainThread]: Starter project path: C:\Users\liyor\Documents\Data Engineer\de_solar_project\.venv\Lib\site-packages\dbt\include\starter_project
+[0m17:09:54.191276 [info ] [MainThread]: 
+Your new dbt project "dbt_solar" was created!
+
+For more information on how to configure the profiles.yml file,
+please consult the dbt documentation here:
+
+  https://docs.getdbt.com/docs/configure-your-profile
+
+One more thing:
+
+Need help? Don't hesitate to reach out to us via GitHub issues or on Slack:
+
+  https://community.getdbt.com/
+
+Happy modeling!
+
+[0m17:09:54.191828 [info ] [MainThread]: Setting up your profile.
+[0m17:10:53.090529 [debug] [MainThread]: Command `dbt init` succeeded at 17:10:53.090301 after 69.35 seconds
+[0m17:10:53.090956 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'end', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001AA1F4CB950>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001AA1EDCC710>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001AA1F8188D0>]}
+[0m17:10:53.091322 [debug] [MainThread]: Flushing usage events
+[0m17:10:54.293556 [debug] [MainThread]: An error was encountered while trying to flush usage events

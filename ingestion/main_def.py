@@ -6,7 +6,7 @@ from pydantic import ValidationError
 import requests
 import time
 from confluent_kafka import Producer
-from validate.history import DeviceData
+from validate.history import DeviceData, flattern
 from validate.raw import flattern_data, InverterData, Response
 import logging
 
@@ -156,6 +156,7 @@ class extract:
         #     data["measurePoints"] = [
         #         "RatedPower",
         #     ]
+        
         all_data = []
         if granularity == 1:
             for measure_points in dataList.values():
@@ -167,30 +168,7 @@ class extract:
                 else:
                     print(f"failed due to {res.raise_for_status}: {res.text}")
 
-            merged = defaultdict(
-                lambda: {
-                    "device_sn": None,
-                    "device_type": None,
-                    "granularity": None,
-                    "collection_time": None,
-                }
-            )
-
-            for device_data in all_data:
-                for time_record in device_data.dataList:
-                    ts = time_record.time
-
-                    # set identity fields once
-                    merged[ts]["device_sn"] = device_data.deviceSn
-                    merged[ts]["device_type"] = device_data.deviceType
-                    merged[ts]["granularity"] = device_data.granularity
-                    merged[ts]["collection_time"] = ts
-
-                    # merge all measurePoints for this timestamp
-                    for item in time_record.itemList:
-                        merged[ts][item.key] = float(item.value)
-
-            return list(merged.values())
+            return flattern(all_data)
 
         res = requests.post(url, headers=headers, json=data)
         print(res.status_code)
