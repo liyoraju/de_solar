@@ -5,7 +5,7 @@ from validate.raw import flattern_data, InverterData, Response
 import logging
 from main_def import delivery_message, dead_letter, extract
 import json
-from validate.history import DeviceData
+from validate.history import DeviceData, flttern_h2_h3_h4
 from history import get_last_date, save_last_date
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
@@ -29,9 +29,11 @@ def history_push_to_kafka(startAt: str, endAt: str, granularity: int, topic: str
                 producer.produce(topic=topic, value=value, callback=delivery_message)
                 producer.poll(0)
         else:
-            value = DeviceData.model_validate(data)
-            value = value.model_dump_json().encode("utf-8")
-            producer.produce(topic=topic, value=value, callback=delivery_message)
+            validated = DeviceData.model_validate(data)
+            for d in flttern_h2_h3_h4(validated):
+                value = json.dumps(d, default=str).encode("utf-8")
+                producer.produce(topic=topic, value=value, callback=delivery_message)
+                producer.poll(0)
     except ValidationError as ve:
         logging.error(f"Validation error : {ve}")
     except KeyboardInterrupt:

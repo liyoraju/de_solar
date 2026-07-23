@@ -1,8 +1,8 @@
+import sys
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, from_unixtime
 from delta import configure_spark_with_delta_pip
 
-# 1. Initialize Spark (same as your main.py)
 builder = (
     SparkSession.builder.appName("delta-check")
     .master("local[1]")
@@ -15,28 +15,32 @@ builder = (
 spark = configure_spark_with_delta_pip(builder).getOrCreate()
 spark.sparkContext.setLogLevel("ERROR")
 
-DELTA_PATH = "/data/delta/solar_data"
+DELTA_PATHS = {
+    "h1": "/data/delta/solar_data",
+    "h2": "/data/delta/solar_data_h2",
+    "h3": "/data/delta/solar_data_h3",
+    "h4": "/data/delta/solar_data_h4",
+}
 
-# 2. Read Delta, order by collection_time descending, limit to 5
-df = (
-    spark.read.format("delta")
-    .load(DELTA_PATH)
-    .orderBy(col("collection_time").desc())
-    .limit(5)
-)
+target = sys.argv[1] if len(sys.argv) > 1 else "h1"
+delta_path = DELTA_PATHS.get(target)
+if not delta_path:
+    print(f"Unknown target: {target}. Choose from: {', '.join(DELTA_PATHS.keys())}")
+    sys.exit(1)
 
-# 3. Select only the most important columns for readability
-important_cols = [
-    "device_sn",
-    "device_type",
-    "source",
-    "collection_time",
-    "total_active_ac_output_power",
-    "daily_active_production",
-    "total_consumption_power",
-]
+try:
+    df = (
+        spark.read.format("delta")
+        .load(delta_path)
+        .orderBy(col("collection_time").desc())
+        .limit(5)
+    )
+except Exception as e:
+    print(f"Error reading {target} delta at {delta_path}: {e}")
+    spark.stop()
+    sys.exit(0)
 
-print("\n=== LAST 5 ROWS IN DELTA LAKE ===\n")
+print(f"\n=== LAST 5 ROWS IN DELTA LAKE ({target}) ===\n")
 df.select(
     "device_sn",
     "device_type",
@@ -46,6 +50,6 @@ df.select(
     "total_active_ac_output_power",
     "daily_active_production",
     "total_consumption_power",
-).show(truncate=False, vertical=True)  # vertical=True makes it easy to read wide rows
+).show(truncate=False, vertical=True)
 
 spark.stop()

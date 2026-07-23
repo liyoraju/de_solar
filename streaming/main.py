@@ -8,6 +8,9 @@ from pyspark.sql.functions import (
     col,
     from_unixtime,
     lit,
+    when,
+    unix_timestamp,
+    concat,
 )
 from pyspark.sql.types import (
     StructType,
@@ -48,8 +51,18 @@ spark = configure_spark_with_delta_pip(builder).getOrCreate()
 spark.sparkContext.setLogLevel("WARN")
 logging.info("- Spark + Delta started")
 
-DELTA_PATH = "/data/delta/solar_data"
+DELTA_PATH_H1 = "/data/delta/solar_data"
+DELTA_PATH_H2 = "/data/delta/solar_data_h2"
+DELTA_PATH_H3 = "/data/delta/solar_data_h3"
+DELTA_PATH_H4 = "/data/delta/solar_data_h4"
+
+TS_TABLE_H1 = "raw_solar"
+TS_TABLE_H2 = "raw_solar_h2"
+TS_TABLE_H3 = "raw_solar_h3"
+TS_TABLE_H4 = "raw_solar_h4"
+
 BOOTSTRAP_SERVERS = "broker:29092"
+DELTA_PATH = DELTA_PATH_H1
 
 # ── Validate env vars early ────────────────────────────────────────────────────
 TIMESCALE_USER = os.getenv("TIMESCALE_USER")
@@ -130,6 +143,24 @@ base_fields = [
 
 unified_schema = StructType(base_fields + metric_fields)
 
+base_fields_aggregate = [
+    StructField("device_sn", StringType(), True),
+    StructField("device_type", StringType(), True),
+    StructField("device_state", IntegerType(), True),
+    StructField("collection_time", StringType(), True),  # <-- Changed to String
+    StructField("granularity", IntegerType(), True),
+    StructField("source", StringType(), True),
+]
+
+aggregate_metric_fields = [
+    StructField("total_active_production", DoubleType(), True),
+    StructField("total_grid_feed_in", DoubleType(), True),
+    StructField("total_consumption", DoubleType(), True),
+    StructField("total_energy_purchased", DoubleType(), True),
+]
+
+aggregate_schema = StructType(base_fields_aggregate + aggregate_metric_fields)
+
 METRIC_COLUMNS = [f.name for f in metric_fields]
 
 TIMESCALE_COLUMNS = [
@@ -144,14 +175,14 @@ TIMESCALE_COLUMNS = [
 
 
 # ── Delta table init ───────────────────────────────────────────────────────────
-def ensure_delta_table():
+def ensure_delta_table(path, label, schema):
     try:
-        spark.sql(f"DESCRIBE EXTENDED delta.`{DELTA_PATH}`").collect()
-        logging.info(f"- Delta table exists at {DELTA_PATH}")
+        spark.sql(f"DESCRIBE EXTENDED delta.`{path}`").collect()
+        logging.info(f"- Delta table [{label}] exists at {path}")
     except AnalysisException:
-        logging.info(f"- Creating Delta table at {DELTA_PATH}...")
-        spark.createDataFrame([], unified_schema).write.format("delta").save(DELTA_PATH)
-        logging.info("- Delta table created")
+        logging.info(f"- Creating Delta table [{label}] at {path}...")
+        spark.createDataFrame([], schema).write.format("delta").save(path)
+        logging.info(f"- Delta table [{label}] created")
 
 
 def wait_for_kafka_topic(topic, retries=16, delay=30):
@@ -172,8 +203,14 @@ def wait_for_kafka_topic(topic, retries=16, delay=30):
     logging.warning(f"- WARNING: Kafka topic '{topic}' not confirmed, proceeding")
 
 
-ensure_delta_table()
+ensure_delta_table(DELTA_PATH_H1, "h1", unified_schema)
+ensure_delta_table(DELTA_PATH_H2, "h2", aggregate_schema)
+ensure_delta_table(DELTA_PATH_H3, "h3", aggregate_schema)
+ensure_delta_table(DELTA_PATH_H4, "h4", aggregate_schema)
 wait_for_kafka_topic("h1_data")
+wait_for_kafka_topic("h2_data")
+wait_for_kafka_topic("h3_data")
+wait_for_kafka_topic("h4_data")
 wait_for_kafka_topic("raw_data")
 
 # ── Source schemas ─────────────────────────────────────────────────────────────
@@ -218,43 +255,28 @@ def execute_sql(sql):
         conn.close()
 
 
-def write_to_timescale(df, label="batch"):
-    """
-    Write a DataFrame to TimescaleDB idempotently via a staging table.
-
-    Flow:
-      1. Write batch to a temp staging table (no constraints — always succeeds)
-      2. INSERT from staging into raw_solar with ON CONFLICT DO NOTHING
-      3. Drop staging table
-
-    This makes every write safe to retry — no duplicate key errors regardless
-    of how many times foreachBatch or sync_loop runs for the same records.
-
-    Requires on TimescaleDB:
-        ALTER TABLE raw_solar
-        ADD CONSTRAINT raw_solar_pkey PRIMARY KEY (device_sn, collection_time);
-    """
-    staging = f"raw_solar_staging_{uuid.uuid4().hex[:8]}"
-    cols = ", ".join(TIMESCALE_COLUMNS)
+def write_to_timescale(df, label="batch", table_name=TS_TABLE_H1, columns=None):
+    staging = f"{table_name}_staging_{uuid.uuid4().hex[:8]}"
+    if columns:
+        df = df.select(*columns)
+    cols = ", ".join(df.columns)
 
     try:
-        # Step 1: write to staging (plain overwrite, no constraint checks)
-        df.select(*TIMESCALE_COLUMNS).write.jdbc(
+        df.write.jdbc(
             url=jdbc_url + "?reWriteBatchedInserts=true",
             table=staging,
             mode="overwrite",
             properties=jdbc_write_properties,
         )
 
-        # Step 2: upsert from staging → raw_solar, skip existing rows
         execute_sql(f"""
-            INSERT INTO raw_solar ({cols})
+            INSERT INTO {table_name} ({cols})
             SELECT {cols} FROM {staging}
             ON CONFLICT (device_sn, collection_time, time) DO NOTHING;
 
             DROP TABLE IF EXISTS {staging};
         """)
-        logging.info(f"TimescaleDB write complete [{label}]")
+        logging.info(f"TimescaleDB write complete [{label}] -> {table_name}")
 
     except Exception as e:
         try:
@@ -264,13 +286,13 @@ def write_to_timescale(df, label="batch"):
         raise e
 
 
-def get_last_synced_ts():
+def get_last_synced_ts(table_name=TS_TABLE_H1):
     try:
         df = (
             spark.read.format("jdbc")
             .options(
                 url=jdbc_url,
-                dbtable="(SELECT COALESCE(MAX(collection_time), 0) AS max_ts FROM raw_solar) AS t",
+                dbtable=f"(SELECT COALESCE(MAX(collection_time), 0) AS max_ts FROM {table_name}) AS t",
                 user=TIMESCALE_USER,
                 password=TIMESCALE_PASSWORD,
                 driver="org.postgresql.Driver",
@@ -279,42 +301,109 @@ def get_last_synced_ts():
         )
         return df.first()[0]
     except Exception as e:
-        logging.warning(f"- Could not fetch last synced ts, defaulting to 0: {e}")
+        logging.warning(
+            f"- Could not fetch last synced ts for {table_name}, defaulting to 0: {e}"
+        )
         return 0
 
 
-def sync_delta_to_timescaledb():
-    """Recovery sync — catches any batches that failed the foreachBatch fast path."""
-    logging.info("Sync loop: checking for unsynced records...")
-    last_ts = get_last_synced_ts()
-    logging.info(f"Sync loop: last synced timestamp = {last_ts}")
+def sync_delta_to_timescaledb(
+    delta_path=DELTA_PATH_H1, timescale_table=TS_TABLE_H1, label="h1", columns=None
+):
+    logging.info(f"Sync loop [{label}]: checking for unsynced records...")
+    last_ts = get_last_synced_ts(timescale_table)
+    logging.info(f"Sync loop [{label}]: last synced timestamp = {last_ts}")
 
     df = (
         spark.read.format("delta")
-        .load(DELTA_PATH)
+        .load(delta_path)
         .filter(col("collection_time") > last_ts)
         .withColumn("time", from_unixtime(col("collection_time")).cast("timestamp"))
-        .select(*TIMESCALE_COLUMNS)
     )
 
+    if columns:
+        df = df.select(*columns)
+
     if df.limit(1).count() == 0:
-        logging.info("Sync loop: nothing to sync")
+        logging.info(f"Sync loop [{label}]: nothing to sync")
         return
 
-    # write_to_timescale uses ON CONFLICT DO NOTHING — safe even if fast path
-    # already wrote these records
-    write_to_timescale(df, label="sync_loop")
-    logging.info("Sync loop: sync complete")
+    write_to_timescale(
+        df, label=f"sync_{label}", table_name=timescale_table, columns=columns
+    )
+    logging.info(f"Sync loop [{label}]: sync complete")
 
 
-def sync_loop():
-    """Runs every 5 minutes as a recovery net for failed foreachBatch writes."""
+def sync_loop(
+    delta_path=DELTA_PATH_H1, timescale_table=TS_TABLE_H1, label="h1", columns=None
+):
     while True:
         time.sleep(300)
         try:
-            sync_delta_to_timescaledb()
+            sync_delta_to_timescaledb(delta_path, timescale_table, label, columns)
         except Exception as e:
-            logging.error(f"Sync loop error: {e}")
+            logging.error(f"Sync loop [{label}] error: {e}")
+
+
+def process_h_batch(topic, label, delta_path, timescale_table):
+    df = (
+        spark.read.format("kafka")
+        .option("kafka.bootstrap.servers", BOOTSTRAP_SERVERS)
+        .option("subscribe", topic)
+        .option("startingOffsets", "earliest")
+        .option("endingOffsets", "latest")
+        .load()
+    )
+
+    parsed = df.select(
+        from_json(col("value").cast("string"), aggregate_schema).alias("data")
+    ).select("data.*")
+
+    count = parsed.count()
+    if count > 0:
+        logging.info(f"- Processing {count} {label} records...")
+        deduped = parsed.dropDuplicates(["device_sn", "collection_time"])
+
+        # Parse collection_time strictly based on granularity string format
+        deduped = deduped.withColumn(
+            "collection_time",
+            when(
+                col("granularity") == 2,
+                unix_timestamp(col("collection_time"), "yyyy-M-d"),  # e.g., "2026-7-01"
+            )
+            .when(
+                col("granularity") == 3,
+                unix_timestamp(
+                    concat(col("collection_time"), lit("-01")), "yyyy-M-d"
+                ),  # e.g., "2026-7" -> "2026-7-01"
+            )
+            .when(
+                col("granularity") == 4,
+                unix_timestamp(
+                    concat(col("collection_time"), lit("-01-01")), "yyyy-M-d"
+                ),  # e.g., "2026" -> "2026-01-01"
+            ),
+        )
+
+        # Convert to timestamp
+        deduped = deduped.withColumn(
+            "time", from_unixtime(col("collection_time")).cast("timestamp")
+        )
+
+        delta_table = DeltaTable.forPath(spark, delta_path)
+        delta_table.alias("target").merge(
+            deduped.alias("source"),
+            "target.device_sn = source.device_sn "
+            "AND target.collection_time = source.collection_time",
+        ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
+        logging.info(f"- {label} backfill to Delta complete")
+
+        write_to_timescale(
+            deduped, label=f"backfill_{label}", table_name=timescale_table
+        )
+        logging.info(f"- {label} backfill to TimescaleDB complete")
+    else:
+        logging.info(f"- No {label} data found")
 
 
 # ── foreachBatch: dual write (Delta + TimescaleDB) ────────────────────────────
@@ -322,13 +411,15 @@ def upsert_to_delta_and_timescale(batch_df, batch_id):
     if batch_df.isEmpty():
         return
 
-    deduped_df = (
-        batch_df.dropDuplicates(["device_sn", "collection_time"])
-        .withColumn("time", from_unixtime(col("collection_time")).cast("timestamp"))
-        .cache()
+    deduped_df = batch_df.dropDuplicates(["device_sn", "collection_time"])
+
+    # Realtime stream is always H1 (granularity == None/1), just convert epoch
+    deduped_df = deduped_df.withColumn(
+        "time", from_unixtime(col("collection_time")).cast("timestamp")
     )
 
-    # ── Write 1: Delta Lake (ACID, source of truth) ────────────────────────────
+    deduped_df = deduped_df.cache()
+
     delta_table = DeltaTable.forPath(spark, DELTA_PATH)
     delta_table.alias("target").merge(
         deduped_df.alias("source"),
@@ -336,9 +427,10 @@ def upsert_to_delta_and_timescale(batch_df, batch_id):
         "AND target.collection_time = source.collection_time",
     ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
 
-    # ── Write 2: TimescaleDB fast path (idempotent via staging table) ──────────
     try:
-        write_to_timescale(deduped_df, label=f"batch_{batch_id}")
+        write_to_timescale(
+            deduped_df, label=f"batch_{batch_id}", columns=TIMESCALE_COLUMNS
+        )
     except Exception as e:
         logging.error(
             f"Batch {batch_id}: TimescaleDB write failed — sync_loop will recover: {e}"
@@ -346,6 +438,18 @@ def upsert_to_delta_and_timescale(batch_df, batch_id):
     finally:
         deduped_df.unpersist()
 
+
+# =====================================================================
+# PHASE 0: Batch Backfill for h2/h3/h4 (daily/monthly/yearly aggregates)
+# =====================================================================
+logging.info("- Starting batch backfill from h2_data...")
+process_h_batch("h2_data", "h2", DELTA_PATH_H2, TS_TABLE_H2)
+
+logging.info("- Starting batch backfill from h3_data...")
+process_h_batch("h3_data", "h3", DELTA_PATH_H3, TS_TABLE_H3)
+
+logging.info("- Starting batch backfill from h4_data...")
+process_h_batch("h4_data", "h4", DELTA_PATH_H4, TS_TABLE_H4)
 
 # =====================================================================
 # PHASE 1: Batch Backfill (h1_data historical data)
@@ -384,8 +488,7 @@ if backfill_count > 0:
 else:
     logging.info("- No backfill data found in h1_data")
 
-# Sync backfill to TimescaleDB (idempotent — safe to re-run)
-sync_delta_to_timescaledb()
+sync_delta_to_timescaledb(DELTA_PATH_H1, TS_TABLE_H1, "h1", columns=TIMESCALE_COLUMNS)
 
 # =====================================================================
 # PHASE 2: Realtime Ingestion (Kafka -> Delta -> TimescaleDB)
@@ -411,17 +514,30 @@ parsed_realtime_df = (
 realtime_delta_query = (
     parsed_realtime_df.writeStream.foreachBatch(upsert_to_delta_and_timescale)
     .outputMode("update")
-    .option("checkpointLocation", f"{DELTA_PATH}/_checkpoints/realtime")
-    .trigger(
-        processingTime="30 seconds"
-    )  # balanced: headroom for Delta merge + JDBC write
+    .option("checkpointLocation", f"{DELTA_PATH_H1}/_checkpoints/realtime")
+    .trigger(processingTime="30 seconds")
     .start()
 )
 
 logging.info("- All streaming queries successfully initiated.")
 
-# Recovery sync thread — runs every 5 min, catches any failed fast-path writes
-sync_thread = threading.Thread(target=sync_loop, daemon=True)
-sync_thread.start()
+sync_threads = [
+    threading.Thread(
+        target=sync_loop,
+        args=(DELTA_PATH_H1, TS_TABLE_H1, "h1", TIMESCALE_COLUMNS),
+        daemon=True,
+    ),
+    threading.Thread(
+        target=sync_loop, args=(DELTA_PATH_H2, TS_TABLE_H2, "h2"), daemon=True
+    ),
+    threading.Thread(
+        target=sync_loop, args=(DELTA_PATH_H3, TS_TABLE_H3, "h3"), daemon=True
+    ),
+    threading.Thread(
+        target=sync_loop, args=(DELTA_PATH_H4, TS_TABLE_H4, "h4"), daemon=True
+    ),
+]
+for t in sync_threads:
+    t.start()
 
 realtime_delta_query.awaitTermination()

@@ -12,9 +12,9 @@ TRACKER_FILES = {
 }
 
 DEFAULT_DATES = {
-    1: os.getenv("DEFAULT_START_DATE_H1", "2026-05-01"),
-    2: os.getenv("DEFAULT_START_DATE_H2", "2026-07-01"),
-    3: os.getenv("DEFAULT_START_DATE_H3", "2026-06"),
+    1: os.getenv("DEFAULT_START_DATE_H1", "2026-04-01"),
+    2: os.getenv("DEFAULT_START_DATE_H2", "2026-04-01"),
+    3: os.getenv("DEFAULT_START_DATE_H3", "2026-04"),
     4: os.getenv("DEFAULT_START_DATE_H4", "2026"),
 }
 

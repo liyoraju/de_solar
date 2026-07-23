@@ -1,5 +1,6 @@
 from pydantic import BaseModel, field_validator, Field, AliasChoices
 from collections import defaultdict
+
 valid_keys = {
     "RatedPower",
     "DCVoltagePV1",
@@ -84,6 +85,7 @@ class DeviceData(BaseModel):
     granularity: int
     dataList: list[DataList]
 
+
 key_map = {
     "RatedPower": "rated_power",
     "DCVoltagePV1": "dc_voltage_pv1",
@@ -130,17 +132,23 @@ key_map = {
     "TotalEnergyPurchased": "total_energy_purchased",
     "TotalConsumptionPower": "total_consumption_power",
     "TotalConsumption": "total_consumption",
+    # --- H2 / H3 / H4 (Aggregates API) keys ONLY ---
+    "Production": "total_active_production",
+    "GridFeed-in": "total_grid_feed_in",
+    "Consumption": "total_consumption",
+    "ElectricityPurchasing": "total_energy_purchased",
 }
+
 
 def flattern(all_data):
     merged = defaultdict(
-                    lambda: {
-                        "device_sn": None,
-                        "device_type": None,
-                        "granularity": None,
-                        "collection_time": None,
-                    }
-                )
+        lambda: {
+            "device_sn": None,
+            "device_type": None,
+            "granularity": None,
+            "collection_time": None,
+        }
+    )
 
     for device_data in all_data:
         for time_record in device_data.dataList:
@@ -157,4 +165,26 @@ def flattern(all_data):
                 if item.key in key_map:
                     merged[ts][key_map[item.key]] = float(item.value)
     return list(merged.values())
-        
+
+
+def flttern_h2_h3_h4(device_data: DeviceData) -> list[dict]:
+    merged = defaultdict(
+        lambda: {
+            "device_sn": None,
+            "device_type": None,
+            "granularity": None,
+            "collection_time": None,
+        }
+    )
+
+    for time_record in device_data.dataList:
+        ts = time_record.time
+        merged[ts]["device_sn"] = device_data.deviceSn
+        merged[ts]["device_type"] = device_data.deviceType
+        merged[ts]["granularity"] = device_data.granularity
+        merged[ts]["collection_time"] = ts
+
+        for item in time_record.itemList:
+            if item.key in key_map:
+                merged[ts][key_map[item.key]] = float(item.value)
+    return list(merged.values())
